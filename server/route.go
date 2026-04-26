@@ -50,7 +50,6 @@ func (srv *Server) initHandlers() {
 		authAPI := apiV1.Group("auth")
 		{
 			authAPI.POST("/login", handler.Auth.Login)
-			authAPI.POST("/logout", handler.Auth.Logout)
 			authAPI.GET("/me", middleware.AuthRequired(srv.auth), handler.Auth.Me)
 		}
 

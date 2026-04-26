@@ -52,7 +52,7 @@ func newTestAuthService(t *testing.T) *auth.Service {
 	return svc
 }
 
-func TestAuthHandlerLoginMeAndLogout(t *testing.T) {
+func TestAuthHandlerLoginAndMe(t *testing.T) {
 	svc := newTestAuthService(t)
 	handler := &AuthHandler{auth: svc}
 
@@ -68,19 +68,14 @@ func TestAuthHandlerLoginMeAndLogout(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &loginRsp))
 	require.NotEmpty(t, loginRsp.Data.Token)
 
-	user, err := svc.Authenticate(context.Background(), loginRsp.Data.Token)
+	principal, err := svc.Authenticate(context.Background(), loginRsp.Data.Token)
 	require.NoError(t, err)
 
 	recorder = httptest.NewRecorder()
 	ctx = GetTestContext(recorder)
-	ctx.Set(consts.ContextKeyAuthUser, user)
+	ctx.Set(consts.ContextKeyAuthUser, principal)
 	handler.Me(ctx)
 	require.Equal(t, http.StatusOK, recorder.Code)
-
-	recorder = httptest.NewRecorder()
-	ctx = GetTestContext(recorder)
-	handler.Logout(ctx)
-	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
 func TestUserHandlerBasics(t *testing.T) {

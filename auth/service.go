@@ -52,6 +52,11 @@ type UserInfo struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
+type Principal struct {
+	Username string         `json:"username"`
+	Role     store.UserRole `json:"role"`
+}
+
 type LoginResult struct {
 	Token     string    `json:"token"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -141,7 +146,7 @@ func (svc *Service) Login(ctx context.Context, username, password string) (*Logi
 	}, nil
 }
 
-func (svc *Service) Authenticate(ctx context.Context, tokenString string) (*store.User, error) {
+func (svc *Service) Authenticate(_ context.Context, tokenString string) (*Principal, error) {
 	if !svc.Enabled() {
 		return nil, nil
 	}
@@ -163,18 +168,13 @@ func (svc *Service) Authenticate(ctx context.Context, tokenString string) (*stor
 	if claims.Subject == "" {
 		return nil, consts.ErrUnauthorized
 	}
-
-	user, err := svc.s.GetUser(ctx, claims.Subject)
-	if err != nil {
-		if errors.Is(err, consts.ErrNotFound) {
-			return nil, consts.ErrUnauthorized
-		}
-		return nil, err
-	}
-	if claims.Role != user.Role {
+	if err := claims.Role.Validate(); err != nil {
 		return nil, consts.ErrUnauthorized
 	}
-	return user, nil
+	return &Principal{
+		Username: claims.Subject,
+		Role:     claims.Role,
+	}, nil
 }
 
 func (svc *Service) ListUsers(ctx context.Context) ([]UserInfo, error) {

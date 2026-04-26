@@ -51,18 +51,6 @@ POST /api/v1/auth/login
 }
 ```
 
-### Logout
-
-```shell
-POST /api/v1/auth/logout
-```
-
-JWTs are stateless and are not revoked by the controller. Clients should discard the token locally.
-
-#### Response JSON Body
-
-* 204
-
 ### Get Current User
 
 ```shell
@@ -78,13 +66,13 @@ GET /api/v1/auth/me
     "auth_enabled": true,
     "user": {
       "username": "admin",
-      "role": "admin",
-      "created_at": "2026-04-26T11:00:00Z",
-      "updated_at": "2026-04-26T11:00:00Z"
+      "role": "admin"
     }
   }
 }
 ```
+
+JWTs are stateless and are not revoked by the controller. Clients should discard the token locally when signing out.
 
 ## User APIs
 

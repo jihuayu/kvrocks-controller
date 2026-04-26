@@ -99,12 +99,12 @@ func AuthRequired(authService *auth.Service) gin.HandlerFunc {
 		if token == "" {
 			token, _ = c.Cookie("kvrocks_controller_token")
 		}
-		user, err := authService.Authenticate(c, token)
+		principal, err := authService.Authenticate(c, token)
 		if err != nil {
 			helper.ResponseError(c, err)
 			return
 		}
-		c.Set(consts.ContextKeyAuthUser, user)
+		c.Set(consts.ContextKeyAuthUser, principal)
 		c.Next()
 	}
 }
@@ -126,8 +126,8 @@ func AdminRequired(authService *auth.Service) gin.HandlerFunc {
 			return
 		}
 
-		user, _ := c.MustGet(consts.ContextKeyAuthUser).(*store.User)
-		if user == nil || user.Role != store.UserRoleAdmin {
+		principal, _ := c.MustGet(consts.ContextKeyAuthUser).(*auth.Principal)
+		if principal == nil || principal.Role != store.UserRoleAdmin {
 			helper.ResponseError(c, consts.ErrForbidden)
 			return
 		}

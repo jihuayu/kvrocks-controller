@@ -54,9 +54,10 @@ func TestServiceLoginAndAuthenticate(t *testing.T) {
 	require.Equal(t, "admin", result.User.Username)
 	require.Equal(t, store.UserRoleAdmin, result.User.Role)
 
-	user, err := svc.Authenticate(ctx, result.Token)
+	principal, err := svc.Authenticate(ctx, result.Token)
 	require.NoError(t, err)
-	require.Equal(t, "admin", user.Username)
+	require.Equal(t, "admin", principal.Username)
+	require.Equal(t, store.UserRoleAdmin, principal.Role)
 }
 
 func TestServiceRejectsInvalidPassword(t *testing.T) {
