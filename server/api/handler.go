@@ -21,10 +21,13 @@
 package api
 
 import (
+	"github.com/apache/kvrocks-controller/auth"
 	"github.com/apache/kvrocks-controller/store"
 )
 
 type Handler struct {
+	Auth      *AuthHandler
+	User      *UserHandler
 	Namespace *NamespaceHandler
 	Cluster   *ClusterHandler
 	Shard     *ShardHandler
@@ -32,8 +35,10 @@ type Handler struct {
 	Raft      *RaftHandler
 }
 
-func NewHandler(s *store.ClusterStore) *Handler {
+func NewHandler(s *store.ClusterStore, authService *auth.Service) *Handler {
 	return &Handler{
+		Auth:      &AuthHandler{auth: authService},
+		User:      &UserHandler{auth: authService},
 		Namespace: &NamespaceHandler{s: s},
 		Cluster:   &ClusterHandler{s: s},
 		Shard:     &ShardHandler{s: s},

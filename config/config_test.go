@@ -35,4 +35,5 @@ func TestDefaultControllerConfigSet(t *testing.T) {
 	}
 
 	assert.Equal(t, expectedControllerConfig, cfg.Controller)
+	assert.Equal(t, DefaultAuthConfig(), cfg.Auth)
 }

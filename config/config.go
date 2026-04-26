@@ -62,7 +62,16 @@ type LogConfig struct {
 	Compress   bool   `yaml:"compress"`
 }
 
+type AuthConfig struct {
+	Type                      string `yaml:"type"`
+	JWTSecret                 string `yaml:"jwt_secret"`
+	MaxSessionDurationSeconds int64  `yaml:"max_session_duration_seconds"`
+	DefaultAdminUsername      string `yaml:"default_admin_username"`
+	DefaultAdminPassword      string `yaml:"default_admin_password"`
+}
+
 const defaultPort = 9379
+const defaultMaxSessionDurationSeconds = 24 * 60 * 60
 
 type Config struct {
 	Addr        string            `yaml:"addr"`
@@ -73,6 +82,7 @@ type Config struct {
 	Consul      *consul.Config    `yaml:"consul"`
 	Admin       AdminConfig       `yaml:"admin"`
 	Controller  *ControllerConfig `yaml:"controller"`
+	Auth        *AuthConfig       `yaml:"auth"`
 	Log         *LogConfig        `yaml:"log"`
 }
 
@@ -80,6 +90,14 @@ func DefaultFailOverConfig() *FailOverConfig {
 	return &FailOverConfig{
 		PingIntervalSeconds: 3,
 		MaxPingCount:        5,
+	}
+}
+
+func DefaultAuthConfig() *AuthConfig {
+	return &AuthConfig{
+		Type:                      "disabled",
+		MaxSessionDurationSeconds: defaultMaxSessionDurationSeconds,
+		DefaultAdminUsername:      "admin",
 	}
 }
 
@@ -91,17 +109,48 @@ func Default() *Config {
 		Controller: &ControllerConfig{
 			FailOver: DefaultFailOverConfig(),
 		},
+		Auth: DefaultAuthConfig(),
 	}
 	c.Addr = c.getAddr()
 	return c
 }
 
 func (c *Config) Validate() error {
+	if c.Controller == nil {
+		c.Controller = &ControllerConfig{FailOver: DefaultFailOverConfig()}
+	}
+	if c.Controller.FailOver == nil {
+		c.Controller.FailOver = DefaultFailOverConfig()
+	}
+	if c.Auth == nil {
+		c.Auth = DefaultAuthConfig()
+	}
 	if c.Controller.FailOver.MaxPingCount < 3 {
 		return errors.New("max ping count required >= 3")
 	}
 	if c.Controller.FailOver.PingIntervalSeconds < 1 {
 		return errors.New("ping interval required >= 1s")
+	}
+	authType := strings.ToLower(c.Auth.Type)
+	switch authType {
+	case "", "disabled":
+		c.Auth.Type = "disabled"
+	case "local":
+		c.Auth.Type = "local"
+		if strings.TrimSpace(c.Auth.JWTSecret) == "" {
+			return errors.New("auth jwt_secret is required when local auth is enabled")
+		}
+		if c.Auth.MaxSessionDurationSeconds <= 0 {
+			return errors.New("auth max_session_duration_seconds required > 0")
+		}
+		if strings.TrimSpace(c.Auth.DefaultAdminUsername) == "" {
+			return errors.New("auth default_admin_username is required when local auth is enabled")
+		}
+		if strings.TrimSpace(c.Auth.DefaultAdminPassword) == "" {
+			return errors.New("auth default_admin_password is required when local auth is enabled")
+		}
+	default:
+		return fmt.Errorf("unsupported auth type: %s", c.Auth.Type)
 	}
 	hostPort := strings.Split(c.Addr, ":")
 	if hostPort[0] == "0.0.0.0" || hostPort[0] == "127.0.0.1" {

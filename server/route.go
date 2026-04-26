@@ -36,7 +36,7 @@ func (srv *Server) initHandlers() {
 		c.Set(consts.ContextKeyStore, srv.store)
 		c.Next()
 	}, middleware.RedirectIfNotLeader)
-	handler := api.NewHandler(srv.store)
+	handler := api.NewHandler(srv.store, srv.auth)
 
 	engine.Any("/debug/pprof/*profile", PProf)
 	engine.GET("/metrics", gin.WrapH(promhttp.Handler()))
@@ -47,14 +47,34 @@ func (srv *Server) initHandlers() {
 
 	apiV1 := engine.Group("/api/v1/")
 	{
-		raftAPI := apiV1.Group("raft")
+		authAPI := apiV1.Group("auth")
+		{
+			authAPI.POST("/login", handler.Auth.Login)
+			authAPI.POST("/logout", middleware.AuthRequired(srv.auth), handler.Auth.Logout)
+			authAPI.GET("/me", middleware.AuthRequired(srv.auth), handler.Auth.Me)
+		}
+
+		protectedAPI := apiV1.Group("")
+		protectedAPI.Use(middleware.AuthRequired(srv.auth))
+
+		userAPI := protectedAPI.Group("user")
+		userAPI.Use(middleware.AuthEnabledRequired(srv.auth), middleware.AdminRequired(srv.auth))
+		{
+			userAPI.GET("", handler.User.List)
+			userAPI.POST("", handler.User.Create)
+			userAPI.GET("/:username", handler.User.Get)
+			userAPI.PUT("/:username", handler.User.Update)
+			userAPI.DELETE("/:username", handler.User.Remove)
+		}
+
+		raftAPI := protectedAPI.Group("raft")
 		{
 			raftAPI.Use(middleware.RequiredRaftEngine)
 			raftAPI.POST("/peers", handler.Raft.UpdatePeer)
 			raftAPI.GET("/peers", handler.Raft.ListPeers)
 		}
 
-		namespaces := apiV1.Group("namespaces")
+		namespaces := protectedAPI.Group("namespaces")
 		{
 			namespaces.GET("", handler.Namespace.List)
 			namespaces.GET("/:namespace", handler.Namespace.Exists)

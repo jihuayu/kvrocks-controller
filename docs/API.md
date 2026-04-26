@@ -1,5 +1,178 @@
 
 # HTTP APIs
+
+When `auth.type` is set to `local`, existing resource APIs require a JWT bearer token:
+
+```http
+Authorization: Bearer <token>
+```
+
+## Authentication APIs
+
+### Login
+
+```shell
+POST /api/v1/auth/login
+```
+
+#### Request Body
+
+```json
+{
+  "username": "admin",
+  "password": "admin-password"
+}
+```
+
+#### Response JSON Body
+
+* 200
+```json
+{
+  "data": {
+    "token": "JWT_TOKEN",
+    "expires_at": "2026-04-26T12:00:00Z",
+    "user": {
+      "username": "admin",
+      "role": "admin",
+      "created_at": "2026-04-26T11:00:00Z",
+      "updated_at": "2026-04-26T11:00:00Z"
+    }
+  }
+}
+```
+
+* 401
+```json
+{
+  "error": {
+    "message": "unauthorized"
+  }
+}
+```
+
+### Logout
+
+```shell
+POST /api/v1/auth/logout
+```
+
+#### Response JSON Body
+
+* 204
+
+### Get Current User
+
+```shell
+GET /api/v1/auth/me
+```
+
+#### Response JSON Body
+
+* 200
+```json
+{
+  "data": {
+    "auth_enabled": true,
+    "user": {
+      "username": "admin",
+      "role": "admin",
+      "created_at": "2026-04-26T11:00:00Z",
+      "updated_at": "2026-04-26T11:00:00Z"
+    }
+  }
+}
+```
+
+## User APIs
+
+User APIs are available only when local authentication is enabled, and only administrators can call them.
+
+### Create User
+
+```shell
+POST /api/v1/user
+```
+
+#### Request Body
+
+```json
+{
+  "username": "dev",
+  "password": "dev-password",
+  "role": "user"
+}
+```
+
+#### Response JSON Body
+
+* 201
+```json
+{
+  "data": {
+    "user": {
+      "username": "dev",
+      "role": "user",
+      "created_at": "2026-04-26T11:00:00Z",
+      "updated_at": "2026-04-26T11:00:00Z"
+    }
+  }
+}
+```
+
+### List Users
+
+```shell
+GET /api/v1/user
+```
+
+#### Response JSON Body
+
+* 200
+```json
+{
+  "data": {
+    "users": [
+      {
+        "username": "admin",
+        "role": "admin",
+        "created_at": "2026-04-26T11:00:00Z",
+        "updated_at": "2026-04-26T11:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Get User
+
+```shell
+GET /api/v1/user/{username}
+```
+
+### Update User
+
+```shell
+PUT /api/v1/user/{username}
+```
+
+#### Request Body
+
+```json
+{
+  "password": "new-password",
+  "role": "admin"
+}
+```
+
+### Delete User
+
+```shell
+DELETE /api/v1/user/{username}
+```
+
+The last administrator cannot be deleted or demoted.
+
 ## Namespace APIs
 ### Create Namespace
 

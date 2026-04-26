@@ -23,7 +23,11 @@ import (
 	"fmt"
 )
 
-const nsPrefix = "/kvrocks/metadata"
+const (
+	nsPrefix      = "/kvrocks/metadata"
+	userPrefix    = "/kvrocks/auth/users"
+	sessionPrefix = "/kvrocks/auth/sessions"
+)
 
 func appendPrefix(ns string) string {
 	return nsPrefix + "/" + ns
@@ -35,4 +39,12 @@ func buildClusterPrefix(ns string) string {
 
 func buildClusterKey(ns, cluster string) string {
 	return fmt.Sprintf("%s/%s", buildClusterPrefix(ns), cluster)
+}
+
+func buildUserKey(username string) string {
+	return fmt.Sprintf("%s/%s", userPrefix, username)
+}
+
+func buildSessionKey(sessionID string) string {
+	return fmt.Sprintf("%s/%s", sessionPrefix, sessionID)
 }

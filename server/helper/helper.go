@@ -67,7 +67,9 @@ func responseData(c *gin.Context, code int, data interface{}) {
 
 func ResponseError(c *gin.Context, err error) {
 	code := http.StatusInternalServerError
-	if errors.Is(err, consts.ErrNotFound) {
+	if errors.Is(err, consts.ErrUnauthorized) {
+		code = http.StatusUnauthorized
+	} else if errors.Is(err, consts.ErrNotFound) {
 		code = http.StatusNotFound
 	} else if errors.Is(err, consts.ErrIndexOutOfRange) {
 		code = http.StatusBadRequest

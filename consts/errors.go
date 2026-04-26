@@ -24,6 +24,7 @@ import "errors"
 
 var (
 	ErrInvalidArgument                  = errors.New("invalid argument")
+	ErrUnauthorized                     = errors.New("unauthorized")
 	ErrNotFound                         = errors.New("not found")
 	ErrForbidden                        = errors.New("forbidden")
 	ErrAlreadyExists                    = errors.New("already exists")

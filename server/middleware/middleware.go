@@ -24,8 +24,10 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/apache/kvrocks-controller/auth"
 	"github.com/apache/kvrocks-controller/store/engine/raft"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -84,6 +86,62 @@ func RedirectIfNotLeader(c *gin.Context) {
 		return
 	}
 	c.Next()
+}
+
+func AuthRequired(authService *auth.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if authService == nil || !authService.Enabled() {
+			c.Next()
+			return
+		}
+
+		token := bearerToken(c.GetHeader("Authorization"))
+		if token == "" {
+			token, _ = c.Cookie("kvrocks_controller_token")
+		}
+		user, session, err := authService.Authenticate(c, token)
+		if err != nil {
+			helper.ResponseError(c, err)
+			return
+		}
+		c.Set(consts.ContextKeyAuthUser, user)
+		c.Set(consts.ContextKeyAuthSession, session)
+		c.Next()
+	}
+}
+
+func AuthEnabledRequired(authService *auth.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if authService == nil || !authService.Enabled() {
+			helper.ResponseError(c, consts.ErrForbidden)
+			return
+		}
+		c.Next()
+	}
+}
+
+func AdminRequired(authService *auth.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if authService == nil || !authService.Enabled() {
+			c.Next()
+			return
+		}
+
+		user, _ := c.MustGet(consts.ContextKeyAuthUser).(*store.User)
+		if user == nil || user.Role != store.UserRoleAdmin {
+			helper.ResponseError(c, consts.ErrForbidden)
+			return
+		}
+		c.Next()
+	}
+}
+
+func bearerToken(header string) string {
+	const prefix = "Bearer "
+	if len(header) < len(prefix) || !strings.EqualFold(header[:len(prefix)], prefix) {
+		return ""
+	}
+	return strings.TrimSpace(header[len(prefix):])
 }
 
 func RequiredNamespace(c *gin.Context) {

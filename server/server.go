@@ -34,6 +34,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/apache/kvrocks-controller/auth"
 	"github.com/apache/kvrocks-controller/config"
 	"github.com/apache/kvrocks-controller/controller"
 	"github.com/apache/kvrocks-controller/logger"
@@ -49,6 +50,7 @@ type Server struct {
 	store      *store.ClusterStore
 	controller *controller.Controller
 	config     *config.Config
+	auth       *auth.Service
 	httpServer *http.Server
 }
 
@@ -88,11 +90,13 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	authService := auth.NewService(cfg.Auth, clusterStore)
 	gin.SetMode(gin.ReleaseMode)
 	return &Server{
 		store:      clusterStore,
 		controller: ctrl,
 		config:     cfg,
+		auth:       authService,
 		engine:     gin.New(),
 	}, nil
 }
@@ -132,6 +136,9 @@ func PProf(c *gin.Context) {
 func (srv *Server) Start(ctx context.Context) error {
 	if ok := srv.store.IsReady(ctx); !ok {
 		return fmt.Errorf("the cluster store is not ready")
+	}
+	if err := srv.auth.Bootstrap(ctx); err != nil {
+		return err
 	}
 	if err := srv.controller.Start(ctx); err != nil {
 		return err
