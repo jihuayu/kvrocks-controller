@@ -41,11 +41,10 @@ controller:
     max_ping_count: 5
 
 # Authentication is disabled by default for backward compatibility.
-# Set type to "local" to enable local users and JWT authentication.
+# Set type to "local" to enable local users and controller-managed sessions.
 auth:
   type: disabled
-  jwt_secret:
-  jwt_token_ttl_seconds: 86400
+  max_session_duration_seconds: 86400
   default_admin_username: admin
   default_admin_password:
 # Uncomment this part to save logs to filename instead of stdout

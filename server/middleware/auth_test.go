@@ -38,11 +38,10 @@ import (
 func TestAuthRequired(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := auth.NewService(&config.AuthConfig{
-		Type:                 auth.TypeLocal,
-		JWTSecret:            "test-secret",
-		JWTTokenTTLSeconds:   3600,
-		DefaultAdminUsername: "admin",
-		DefaultAdminPassword: "admin-password",
+		Type:                      auth.TypeLocal,
+		MaxSessionDurationSeconds: 3600,
+		DefaultAdminUsername:      "admin",
+		DefaultAdminPassword:      "admin-password",
 	}, store.NewClusterStore(engine.NewMock()))
 	require.NoError(t, svc.Bootstrap(context.Background()))
 	loginResult, err := svc.Login(context.Background(), "admin", "admin-password")
@@ -68,11 +67,10 @@ func TestAuthRequired(t *testing.T) {
 func TestAdminRequired(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := auth.NewService(&config.AuthConfig{
-		Type:                 auth.TypeLocal,
-		JWTSecret:            "test-secret",
-		JWTTokenTTLSeconds:   3600,
-		DefaultAdminUsername: "admin",
-		DefaultAdminPassword: "admin-password",
+		Type:                      auth.TypeLocal,
+		MaxSessionDurationSeconds: 3600,
+		DefaultAdminUsername:      "admin",
+		DefaultAdminPassword:      "admin-password",
 	}, store.NewClusterStore(engine.NewMock()))
 	require.NoError(t, svc.Bootstrap(context.Background()))
 	_, err := svc.CreateUser(context.Background(), "dev", "dev-password", store.UserRoleUser)

@@ -99,12 +99,13 @@ func AuthRequired(authService *auth.Service) gin.HandlerFunc {
 		if token == "" {
 			token, _ = c.Cookie("kvrocks_controller_token")
 		}
-		principal, err := authService.Authenticate(c, token)
+		principal, session, err := authService.Authenticate(c, token)
 		if err != nil {
 			helper.ResponseError(c, err)
 			return
 		}
 		c.Set(consts.ContextKeyAuthUser, principal)
+		c.Set(consts.ContextKeyAuthSession, session)
 		c.Next()
 	}
 }

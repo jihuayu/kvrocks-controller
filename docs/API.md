@@ -1,7 +1,7 @@
 
 # HTTP APIs
 
-When `auth.type` is set to `local`, existing resource APIs require a JWT bearer token:
+When `auth.type` is set to `local`, existing resource APIs require a controller-managed session token:
 
 ```http
 Authorization: Bearer <token>
@@ -30,7 +30,7 @@ POST /api/v1/auth/login
 ```json
 {
   "data": {
-    "token": "JWT_TOKEN",
+    "token": "SESSION_TOKEN",
     "expires_at": "2026-04-26T12:00:00Z",
     "user": {
       "username": "admin",
@@ -66,13 +66,25 @@ GET /api/v1/auth/me
     "auth_enabled": true,
     "user": {
       "username": "admin",
-      "role": "admin"
+      "role": "admin",
+      "created_at": "2026-04-26T11:00:00Z",
+      "expires_at": "2026-04-26T12:00:00Z"
     }
   }
 }
 ```
 
-JWTs are stateless and are not revoked by the controller. Clients should discard the token locally when signing out.
+### Logout
+
+```shell
+POST /api/v1/auth/logout
+```
+
+The current session is removed from storage and the token becomes invalid immediately.
+
+#### Response JSON Body
+
+* 204
 
 ## User APIs
 

@@ -26,6 +26,7 @@ import (
 	"github.com/apache/kvrocks-controller/auth"
 	"github.com/apache/kvrocks-controller/consts"
 	"github.com/apache/kvrocks-controller/server/helper"
+	"github.com/apache/kvrocks-controller/store"
 )
 
 type AuthHandler struct {
@@ -48,6 +49,19 @@ func (handler *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 	helper.ResponseOK(c, result)
+}
+
+func (handler *AuthHandler) Logout(c *gin.Context) {
+	if handler.auth == nil || !handler.auth.Enabled() {
+		helper.ResponseNoContent(c)
+		return
+	}
+	session, _ := c.MustGet(consts.ContextKeyAuthSession).(*store.Session)
+	if err := handler.auth.Logout(c, session.ID); err != nil {
+		helper.ResponseError(c, err)
+		return
+	}
+	helper.ResponseNoContent(c)
 }
 
 func (handler *AuthHandler) Me(c *gin.Context) {

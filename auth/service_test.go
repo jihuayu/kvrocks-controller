@@ -35,15 +35,14 @@ import (
 
 func newTestService() *Service {
 	return NewService(&config.AuthConfig{
-		Type:                 TypeLocal,
-		JWTSecret:            "test-secret",
-		JWTTokenTTLSeconds:   3600,
-		DefaultAdminUsername: "admin",
-		DefaultAdminPassword: "admin-password",
+		Type:                      TypeLocal,
+		MaxSessionDurationSeconds: 3600,
+		DefaultAdminUsername:      "admin",
+		DefaultAdminPassword:      "admin-password",
 	}, store.NewClusterStore(engine.NewMock()))
 }
 
-func TestServiceLoginAndAuthenticate(t *testing.T) {
+func TestServiceLoginAuthenticateAndLogout(t *testing.T) {
 	ctx := context.Background()
 	svc := newTestService()
 	require.NoError(t, svc.Bootstrap(ctx))
@@ -54,10 +53,15 @@ func TestServiceLoginAndAuthenticate(t *testing.T) {
 	require.Equal(t, "admin", result.User.Username)
 	require.Equal(t, store.UserRoleAdmin, result.User.Role)
 
-	principal, err := svc.Authenticate(ctx, result.Token)
+	principal, session, err := svc.Authenticate(ctx, result.Token)
 	require.NoError(t, err)
 	require.Equal(t, "admin", principal.Username)
 	require.Equal(t, store.UserRoleAdmin, principal.Role)
+	require.Equal(t, result.Token, session.ID)
+
+	require.NoError(t, svc.Logout(ctx, session.ID))
+	_, _, err = svc.Authenticate(ctx, result.Token)
+	require.ErrorIs(t, err, consts.ErrUnauthorized)
 }
 
 func TestServiceRejectsInvalidPassword(t *testing.T) {
@@ -85,4 +89,22 @@ func TestServiceProtectsLastAdmin(t *testing.T) {
 	require.NoError(t, err)
 	_, err = svc.UpdateUser(ctx, "admin", &role, "")
 	require.NoError(t, err)
+}
+
+func TestServiceInvalidatesUserSessionsAfterUserUpdate(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService()
+	require.NoError(t, svc.Bootstrap(ctx))
+
+	result, err := svc.Login(ctx, "admin", "admin-password")
+	require.NoError(t, err)
+
+	_, err = svc.CreateUser(ctx, "second-admin", "password", store.UserRoleAdmin)
+	require.NoError(t, err)
+	role := store.UserRoleUser
+	_, err = svc.UpdateUser(ctx, "admin", &role, "")
+	require.NoError(t, err)
+
+	_, _, err = svc.Authenticate(ctx, result.Token)
+	require.ErrorIs(t, err, consts.ErrUnauthorized)
 }

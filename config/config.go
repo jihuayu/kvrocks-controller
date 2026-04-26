@@ -63,15 +63,14 @@ type LogConfig struct {
 }
 
 type AuthConfig struct {
-	Type                 string `yaml:"type"`
-	JWTSecret            string `yaml:"jwt_secret"`
-	JWTTokenTTLSeconds   int64  `yaml:"jwt_token_ttl_seconds"`
-	DefaultAdminUsername string `yaml:"default_admin_username"`
-	DefaultAdminPassword string `yaml:"default_admin_password"`
+	Type                      string `yaml:"type"`
+	MaxSessionDurationSeconds int64  `yaml:"max_session_duration_seconds"`
+	DefaultAdminUsername      string `yaml:"default_admin_username"`
+	DefaultAdminPassword      string `yaml:"default_admin_password"`
 }
 
 const defaultPort = 9379
-const defaultJWTTokenTTLSeconds = 24 * 60 * 60
+const defaultMaxSessionDurationSeconds = 24 * 60 * 60
 
 type Config struct {
 	Addr        string            `yaml:"addr"`
@@ -95,9 +94,9 @@ func DefaultFailOverConfig() *FailOverConfig {
 
 func DefaultAuthConfig() *AuthConfig {
 	return &AuthConfig{
-		Type:                 "disabled",
-		JWTTokenTTLSeconds:   defaultJWTTokenTTLSeconds,
-		DefaultAdminUsername: "admin",
+		Type:                      "disabled",
+		MaxSessionDurationSeconds: defaultMaxSessionDurationSeconds,
+		DefaultAdminUsername:      "admin",
 	}
 }
 
@@ -137,11 +136,8 @@ func (c *Config) Validate() error {
 		c.Auth.Type = "disabled"
 	case "local":
 		c.Auth.Type = "local"
-		if strings.TrimSpace(c.Auth.JWTSecret) == "" {
-			return errors.New("auth jwt_secret is required when local auth is enabled")
-		}
-		if c.Auth.JWTTokenTTLSeconds <= 0 {
-			return errors.New("auth jwt_token_ttl_seconds required > 0")
+		if c.Auth.MaxSessionDurationSeconds <= 0 {
+			return errors.New("auth max_session_duration_seconds required > 0")
 		}
 		if strings.TrimSpace(c.Auth.DefaultAdminUsername) == "" {
 			return errors.New("auth default_admin_username is required when local auth is enabled")

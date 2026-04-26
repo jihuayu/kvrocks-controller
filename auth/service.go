@@ -22,12 +22,13 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/apache/kvrocks-controller/config"
@@ -53,19 +54,16 @@ type UserInfo struct {
 }
 
 type Principal struct {
-	Username string         `json:"username"`
-	Role     store.UserRole `json:"role"`
+	Username  string         `json:"username"`
+	Role      store.UserRole `json:"role"`
+	CreatedAt time.Time      `json:"created_at"`
+	ExpiresAt time.Time      `json:"expires_at"`
 }
 
 type LoginResult struct {
 	Token     string    `json:"token"`
 	ExpiresAt time.Time `json:"expires_at"`
 	User      UserInfo  `json:"user"`
-}
-
-type Claims struct {
-	Role store.UserRole `json:"role"`
-	jwt.RegisteredClaims
 }
 
 func NewService(cfg *config.AuthConfig, s *store.ClusterStore) *Service {
@@ -133,48 +131,65 @@ func (svc *Service) Login(ctx context.Context, username, password string) (*Logi
 	}
 
 	now := time.Now().UTC()
-	expiresAt := now.Add(time.Duration(svc.cfg.JWTTokenTTLSeconds) * time.Second)
-
-	token, err := svc.signToken(user, expiresAt, now)
+	expiresAt := now.Add(time.Duration(svc.cfg.MaxSessionDurationSeconds) * time.Second)
+	sessionID, err := newSessionID()
 	if err != nil {
 		return nil, err
 	}
+	session := &store.Session{
+		ID:        sessionID,
+		Username:  user.Username,
+		Role:      user.Role,
+		CreatedAt: now,
+		ExpiresAt: expiresAt,
+	}
+	if err := svc.s.CreateSession(ctx, session); err != nil {
+		return nil, err
+	}
+
 	return &LoginResult{
-		Token:     token,
+		Token:     session.ID,
 		ExpiresAt: expiresAt,
 		User:      toUserInfo(user),
 	}, nil
 }
 
-func (svc *Service) Authenticate(_ context.Context, tokenString string) (*Principal, error) {
+func (svc *Service) Authenticate(ctx context.Context, tokenString string) (*Principal, *store.Session, error) {
 	if !svc.Enabled() {
-		return nil, nil
+		return nil, nil, nil
 	}
 	tokenString = strings.TrimSpace(tokenString)
 	if tokenString == "" {
-		return nil, consts.ErrUnauthorized
+		return nil, nil, consts.ErrUnauthorized
 	}
 
-	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, consts.ErrUnauthorized
+	session, err := svc.s.GetSession(ctx, tokenString)
+	if err != nil {
+		if errors.Is(err, consts.ErrNotFound) {
+			return nil, nil, consts.ErrUnauthorized
 		}
-		return []byte(svc.cfg.JWTSecret), nil
-	})
-	if err != nil || !token.Valid {
-		return nil, consts.ErrUnauthorized
+		return nil, nil, err
 	}
-	if claims.Subject == "" {
-		return nil, consts.ErrUnauthorized
-	}
-	if err := claims.Role.Validate(); err != nil {
-		return nil, consts.ErrUnauthorized
+	if !session.ExpiresAt.After(time.Now().UTC()) {
+		_ = svc.s.RemoveSession(ctx, session.ID)
+		return nil, nil, consts.ErrUnauthorized
 	}
 	return &Principal{
-		Username: claims.Subject,
-		Role:     claims.Role,
-	}, nil
+		Username:  session.Username,
+		Role:      session.Role,
+		CreatedAt: session.CreatedAt,
+		ExpiresAt: session.ExpiresAt,
+	}, session, nil
+}
+
+func (svc *Service) Logout(ctx context.Context, sessionID string) error {
+	if !svc.Enabled() {
+		return nil
+	}
+	if sessionID == "" {
+		return consts.ErrUnauthorized
+	}
+	return svc.s.RemoveSession(ctx, sessionID)
 }
 
 func (svc *Service) ListUsers(ctx context.Context) ([]UserInfo, error) {
@@ -249,6 +264,9 @@ func (svc *Service) UpdateUser(ctx context.Context, username string, role *store
 		}
 		user.PasswordHash = passwordHash
 	}
+	if err := svc.s.RemoveUserSessions(ctx, username); err != nil {
+		return nil, err
+	}
 	user.UpdatedAt = time.Now().UTC()
 	if err := svc.s.UpdateUser(ctx, user); err != nil {
 		return nil, err
@@ -267,21 +285,10 @@ func (svc *Service) RemoveUser(ctx context.Context, username string) error {
 			return err
 		}
 	}
-	return svc.s.RemoveUser(ctx, username)
-}
-
-func (svc *Service) signToken(user *store.User, expiresAt time.Time, now time.Time) (string, error) {
-	claims := &Claims{
-		Role: user.Role,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   user.Username,
-			IssuedAt:  jwt.NewNumericDate(now),
-			NotBefore: jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-		},
+	if err := svc.s.RemoveUserSessions(ctx, username); err != nil {
+		return err
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(svc.cfg.JWTSecret))
+	return svc.s.RemoveUser(ctx, username)
 }
 
 func (svc *Service) ensureAnotherAdmin(ctx context.Context, username string) error {
@@ -316,4 +323,12 @@ func hashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(hash), nil
+}
+
+func newSessionID() (string, error) {
+	randomBytes := make([]byte, 32)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(randomBytes), nil
 }
