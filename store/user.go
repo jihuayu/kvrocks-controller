@@ -45,13 +45,6 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-type Session struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
 func (r UserRole) Validate() error {
 	switch r {
 	case UserRoleAdmin, UserRoleUser:
@@ -73,22 +66,6 @@ func (u *User) Validate() error {
 	}
 	if err := u.Role.Validate(); err != nil {
 		return err
-	}
-	return nil
-}
-
-func (s *Session) Validate() error {
-	if strings.TrimSpace(s.ID) == "" {
-		return fmt.Errorf("session id is required: %w", consts.ErrInvalidArgument)
-	}
-	if strings.Contains(s.ID, "/") {
-		return fmt.Errorf("session id must not contain '/': %w", consts.ErrInvalidArgument)
-	}
-	if strings.TrimSpace(s.Username) == "" {
-		return fmt.Errorf("session username is required: %w", consts.ErrInvalidArgument)
-	}
-	if s.ExpiresAt.IsZero() {
-		return fmt.Errorf("session expires_at is required: %w", consts.ErrInvalidArgument)
 	}
 	return nil
 }
@@ -146,36 +123,6 @@ func (s *ClusterStore) RemoveUser(ctx context.Context, username string) error {
 		return fmt.Errorf("user: %w", consts.ErrNotFound)
 	}
 	return s.e.Delete(ctx, buildUserKey(username))
-}
-
-func (s *ClusterStore) CreateSession(ctx context.Context, session *Session) error {
-	if err := session.Validate(); err != nil {
-		return err
-	}
-	if exists, _ := s.e.Exists(ctx, buildSessionKey(session.ID)); exists {
-		return fmt.Errorf("session: %w", consts.ErrAlreadyExists)
-	}
-	value, err := json.Marshal(session)
-	if err != nil {
-		return fmt.Errorf("session: %w", err)
-	}
-	return s.e.Set(ctx, buildSessionKey(session.ID), value)
-}
-
-func (s *ClusterStore) GetSession(ctx context.Context, id string) (*Session, error) {
-	value, err := s.e.Get(ctx, buildSessionKey(id))
-	if err != nil {
-		return nil, fmt.Errorf("session: %w", err)
-	}
-	var session Session
-	if err := json.Unmarshal(value, &session); err != nil {
-		return nil, fmt.Errorf("session: %w", err)
-	}
-	return &session, nil
-}
-
-func (s *ClusterStore) RemoveSession(ctx context.Context, id string) error {
-	return s.e.Delete(ctx, buildSessionKey(id))
 }
 
 func (s *ClusterStore) setUser(ctx context.Context, user *User) error {

@@ -42,11 +42,11 @@ import (
 func newTestAuthService(t *testing.T) *auth.Service {
 	t.Helper()
 	svc := auth.NewService(&config.AuthConfig{
-		Type:                      auth.TypeLocal,
-		JWTSecret:                 "test-secret",
-		MaxSessionDurationSeconds: 3600,
-		DefaultAdminUsername:      "admin",
-		DefaultAdminPassword:      "admin-password",
+		Type:                 auth.TypeLocal,
+		JWTSecret:            "test-secret",
+		JWTTokenTTLSeconds:   3600,
+		DefaultAdminUsername: "admin",
+		DefaultAdminPassword: "admin-password",
 	}, store.NewClusterStore(engine.NewMock()))
 	require.NoError(t, svc.Bootstrap(context.Background()))
 	return svc
@@ -68,24 +68,19 @@ func TestAuthHandlerLoginMeAndLogout(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &loginRsp))
 	require.NotEmpty(t, loginRsp.Data.Token)
 
-	user, session, err := svc.Authenticate(context.Background(), loginRsp.Data.Token)
+	user, err := svc.Authenticate(context.Background(), loginRsp.Data.Token)
 	require.NoError(t, err)
 
 	recorder = httptest.NewRecorder()
 	ctx = GetTestContext(recorder)
 	ctx.Set(consts.ContextKeyAuthUser, user)
-	ctx.Set(consts.ContextKeyAuthSession, session)
 	handler.Me(ctx)
 	require.Equal(t, http.StatusOK, recorder.Code)
 
 	recorder = httptest.NewRecorder()
 	ctx = GetTestContext(recorder)
-	ctx.Set(consts.ContextKeyAuthSession, session)
 	handler.Logout(ctx)
 	require.Equal(t, http.StatusNoContent, recorder.Code)
-
-	_, _, err = svc.Authenticate(context.Background(), loginRsp.Data.Token)
-	require.ErrorIs(t, err, consts.ErrUnauthorized)
 }
 
 func TestUserHandlerBasics(t *testing.T) {

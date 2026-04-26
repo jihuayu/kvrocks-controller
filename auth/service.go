@@ -22,8 +22,6 @@ package auth
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -61,8 +59,7 @@ type LoginResult struct {
 }
 
 type Claims struct {
-	Role      store.UserRole `json:"role"`
-	SessionID string         `json:"sid"`
+	Role store.UserRole `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -131,18 +128,9 @@ func (svc *Service) Login(ctx context.Context, username, password string) (*Logi
 	}
 
 	now := time.Now().UTC()
-	expiresAt := now.Add(time.Duration(svc.cfg.MaxSessionDurationSeconds) * time.Second)
-	session := &store.Session{
-		ID:        newSessionID(),
-		Username:  user.Username,
-		CreatedAt: now,
-		ExpiresAt: expiresAt,
-	}
-	if err := svc.s.CreateSession(ctx, session); err != nil {
-		return nil, err
-	}
+	expiresAt := now.Add(time.Duration(svc.cfg.JWTTokenTTLSeconds) * time.Second)
 
-	token, err := svc.signToken(user, session, now)
+	token, err := svc.signToken(user, expiresAt, now)
 	if err != nil {
 		return nil, err
 	}
@@ -153,13 +141,13 @@ func (svc *Service) Login(ctx context.Context, username, password string) (*Logi
 	}, nil
 }
 
-func (svc *Service) Authenticate(ctx context.Context, tokenString string) (*store.User, *store.Session, error) {
+func (svc *Service) Authenticate(ctx context.Context, tokenString string) (*store.User, error) {
 	if !svc.Enabled() {
-		return nil, nil, nil
+		return nil, nil
 	}
 	tokenString = strings.TrimSpace(tokenString)
 	if tokenString == "" {
-		return nil, nil, consts.ErrUnauthorized
+		return nil, consts.ErrUnauthorized
 	}
 
 	claims := &Claims{}
@@ -170,42 +158,23 @@ func (svc *Service) Authenticate(ctx context.Context, tokenString string) (*stor
 		return []byte(svc.cfg.JWTSecret), nil
 	})
 	if err != nil || !token.Valid {
-		return nil, nil, consts.ErrUnauthorized
+		return nil, consts.ErrUnauthorized
 	}
-	if claims.Subject == "" || claims.SessionID == "" {
-		return nil, nil, consts.ErrUnauthorized
-	}
-
-	session, err := svc.s.GetSession(ctx, claims.SessionID)
-	if err != nil {
-		if errors.Is(err, consts.ErrNotFound) {
-			return nil, nil, consts.ErrUnauthorized
-		}
-		return nil, nil, err
-	}
-	if session.Username != claims.Subject || !session.ExpiresAt.After(time.Now().UTC()) {
-		_ = svc.s.RemoveSession(ctx, claims.SessionID)
-		return nil, nil, consts.ErrUnauthorized
+	if claims.Subject == "" {
+		return nil, consts.ErrUnauthorized
 	}
 
 	user, err := svc.s.GetUser(ctx, claims.Subject)
 	if err != nil {
 		if errors.Is(err, consts.ErrNotFound) {
-			return nil, nil, consts.ErrUnauthorized
+			return nil, consts.ErrUnauthorized
 		}
-		return nil, nil, err
+		return nil, err
 	}
-	return user, session, nil
-}
-
-func (svc *Service) Logout(ctx context.Context, sessionID string) error {
-	if !svc.Enabled() {
-		return nil
+	if claims.Role != user.Role {
+		return nil, consts.ErrUnauthorized
 	}
-	if sessionID == "" {
-		return consts.ErrUnauthorized
-	}
-	return svc.s.RemoveSession(ctx, sessionID)
+	return user, nil
 }
 
 func (svc *Service) ListUsers(ctx context.Context) ([]UserInfo, error) {
@@ -301,15 +270,14 @@ func (svc *Service) RemoveUser(ctx context.Context, username string) error {
 	return svc.s.RemoveUser(ctx, username)
 }
 
-func (svc *Service) signToken(user *store.User, session *store.Session, now time.Time) (string, error) {
+func (svc *Service) signToken(user *store.User, expiresAt time.Time, now time.Time) (string, error) {
 	claims := &Claims{
-		Role:      user.Role,
-		SessionID: session.ID,
+		Role: user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   user.Username,
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(session.ExpiresAt),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -348,12 +316,4 @@ func hashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(hash), nil
-}
-
-func newSessionID() string {
-	randomBytes := make([]byte, 32)
-	if _, err := rand.Read(randomBytes); err != nil {
-		return fmt.Sprintf("%d", time.Now().UnixNano())
-	}
-	return base64.RawURLEncoding.EncodeToString(randomBytes)
 }

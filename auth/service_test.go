@@ -35,15 +35,15 @@ import (
 
 func newTestService() *Service {
 	return NewService(&config.AuthConfig{
-		Type:                      TypeLocal,
-		JWTSecret:                 "test-secret",
-		MaxSessionDurationSeconds: 3600,
-		DefaultAdminUsername:      "admin",
-		DefaultAdminPassword:      "admin-password",
+		Type:                 TypeLocal,
+		JWTSecret:            "test-secret",
+		JWTTokenTTLSeconds:   3600,
+		DefaultAdminUsername: "admin",
+		DefaultAdminPassword: "admin-password",
 	}, store.NewClusterStore(engine.NewMock()))
 }
 
-func TestServiceLoginAuthenticateAndLogout(t *testing.T) {
+func TestServiceLoginAndAuthenticate(t *testing.T) {
 	ctx := context.Background()
 	svc := newTestService()
 	require.NoError(t, svc.Bootstrap(ctx))
@@ -54,14 +54,9 @@ func TestServiceLoginAuthenticateAndLogout(t *testing.T) {
 	require.Equal(t, "admin", result.User.Username)
 	require.Equal(t, store.UserRoleAdmin, result.User.Role)
 
-	user, session, err := svc.Authenticate(ctx, result.Token)
+	user, err := svc.Authenticate(ctx, result.Token)
 	require.NoError(t, err)
 	require.Equal(t, "admin", user.Username)
-	require.Equal(t, "admin", session.Username)
-
-	require.NoError(t, svc.Logout(ctx, session.ID))
-	_, _, err = svc.Authenticate(ctx, result.Token)
-	require.ErrorIs(t, err, consts.ErrUnauthorized)
 }
 
 func TestServiceRejectsInvalidPassword(t *testing.T) {

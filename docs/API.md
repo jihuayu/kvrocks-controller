@@ -57,6 +57,8 @@ POST /api/v1/auth/login
 POST /api/v1/auth/logout
 ```
 
+JWTs are stateless and are not revoked by the controller. Clients should discard the token locally.
+
 #### Response JSON Body
 
 * 204
